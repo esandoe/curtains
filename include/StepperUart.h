@@ -20,6 +20,10 @@ public:
         return driver.SGTHRS();
     }
     void moveTo(int position);
+    int getTargetPosition()
+    {
+        return targetPosition;
+    }
     void stop();
     int getCurrentPosition();
     void setCurrentPosition(int position);

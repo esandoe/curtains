@@ -9,7 +9,7 @@ void openCover();
 void closeCover();
 void stopCover();
 void goToLiftPercentage(uint8_t liftPercentage);
-void HomingRoutine();
+void homingRoutine();
 
-void createAndSetupZigbeeEndpoint(uint8_t endpoint = 10);
+void createAndSetupZigbeeEndpoints();
 void readAndUpdateZigbeeCoverState(StepperUart &motor);

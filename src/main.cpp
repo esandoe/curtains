@@ -41,7 +41,7 @@ void setup()
   // Wait a while for serial monitor to connect
   delay(2000);
 
-  createAndSetupZigbeeEndpoint(10);
+  createAndSetupZigbeeEndpoints();
 
 #ifndef ZIGBEE_DISABLED
   Serial.println("Calling Zigbee.begin()");
@@ -114,7 +114,7 @@ void loop()
     stopCover();
     break;
   case 'h':
-    HomingRoutine();
+    homingRoutine();
     break;
   case '1':
     stepperMotor.setSpeed(1000, 8);
