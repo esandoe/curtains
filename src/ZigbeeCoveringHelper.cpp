@@ -32,13 +32,16 @@ void updatePosition(int32_t currentPosition)
 
     prefs.begin("ZBCover");
     int32_t savedPosition = prefs.getInt("currentPosition", 0);
-    prefs.end();
-
     if (savedPosition == currentPosition)
+    {
+        prefs.end();
         return;
-    
+    }
+
     prefs.putInt("currentPosition", static_cast<int32_t>(currentPosition));
     Serial.printf("Saved lift position: %d (%.2f%%).\n", currentPosition, currentLiftPercentage);
+
+    prefs.end();
 
     if (!Zigbee.started() || zbCovering == nullptr)
         return;
@@ -186,7 +189,7 @@ void goToLiftPercentage(uint8_t liftPercentage)
     if (newPosition < stepperMotor->getCurrentPosition())
     {
         stepperMotor->moveTo(newPosition - liftBackOff); // Move to the target minus the lift back off
-        
+
         // Because we are moving up, create a new task where we wait for it to stop and then back off a bit
         // to prevent tension in the string
         TaskFunction_t backOffTask = [](void *pvParameters)
@@ -208,7 +211,8 @@ void goToLiftPercentage(uint8_t liftPercentage)
         };
         xTaskCreate(backOffTask, "backOffTask", 2048, nullptr, 1, nullptr);
     }
-    else {
+    else
+    {
         // If we are moving down, we just move to the target position as we are already releasing the tension
         stepperMotor->moveTo(newPosition);
     }

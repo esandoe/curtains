@@ -18,11 +18,10 @@ void vUpdatePositionTask(TimerHandle_t xTimer)
         return;
     }
 
-    lastUpdate = currentPosition;
-
     if (stepper->positionUpdateCallback)
     {
         stepper->positionUpdateCallback(currentPosition);
+        lastUpdate = currentPosition;
     }
 }
 
@@ -40,7 +39,6 @@ void vStallDetectTask(TimerHandle_t xTimer)
     }
     // else if (stepper->isRunning())
     //     Serial.printf("TSTEP: %d, SG: %d, SGTHRS: %d\n", driver.TSTEP(), driver.SG_RESULT(), driver.SGTHRS());
-
 }
 
 void StepperUart::init()
@@ -70,7 +68,7 @@ void StepperUart::init()
 
     TimerHandle_t updateTimer = xTimerCreate(
         "UpdateTask",        // Timer name
-        pdMS_TO_TICKS(1000),  // Timer interval
+        pdMS_TO_TICKS(1000), // Timer interval
         pdTRUE,              // Auto-reload
         this,                // pass the stepper instance to the task
         vUpdatePositionTask  // Callback function
@@ -78,11 +76,11 @@ void StepperUart::init()
     xTimerStart(updateTimer, 0); // Start the timer
 
     TimerHandle_t stallTask = xTimerCreate(
-        "StepperTask",     // Timer name
+        "StepperTask",    // Timer name
         pdMS_TO_TICKS(5), // Timer interval
-        pdTRUE,            // Auto-reload
-        this,              // pass the stepper instance to the task
-        vStallDetectTask   // Callback function
+        pdTRUE,           // Auto-reload
+        this,             // pass the stepper instance to the task
+        vStallDetectTask  // Callback function
     );
     xTimerStart(stallTask, 0); // Start the timer
 }
