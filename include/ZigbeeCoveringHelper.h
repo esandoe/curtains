@@ -3,7 +3,7 @@
 #include <Arduino.h>
 #include "StepperUart.h"
 
-void updatePosition(int currentPosition);
+void updatePosition(int32_t currentPosition);
 
 void openCover();
 void closeCover();

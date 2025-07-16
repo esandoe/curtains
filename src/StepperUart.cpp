@@ -11,7 +11,7 @@ StepperUart::StepperUart(int dirPin, int stepPin, int enablePin)
 void vUpdatePositionTask(TimerHandle_t xTimer)
 {
     StepperUart *stepper = static_cast<StepperUart *>(pvTimerGetTimerID(xTimer));
-    int currentPosition = stepper->getCurrentPosition();
+    int32_t currentPosition = stepper->getCurrentPosition();
 
     if (currentPosition == lastUpdate)
     {
@@ -70,7 +70,7 @@ void StepperUart::init()
 
     TimerHandle_t updateTimer = xTimerCreate(
         "UpdateTask",        // Timer name
-        pdMS_TO_TICKS(200),  // Timer interval
+        pdMS_TO_TICKS(1000),  // Timer interval
         pdTRUE,              // Auto-reload
         this,                // pass the stepper instance to the task
         vUpdatePositionTask  // Callback function
@@ -105,7 +105,7 @@ void StepperUart::setSGTHRS(uint8_t threshold)
     driver.SGTHRS(threshold);
     Serial.printf("SGTHRS set to: %d\n", threshold);
 }
-void StepperUart::moveTo(int position)
+void StepperUart::moveTo(int32_t position)
 {
     targetPosition = position;
     _stepper->moveTo(position);
@@ -118,11 +118,11 @@ void StepperUart::forceStop()
 {
     _stepper->forceStop();
 }
-int StepperUart::getCurrentPosition()
+int32_t StepperUart::getCurrentPosition()
 {
     return _stepper->getCurrentPosition();
 }
-void StepperUart::setCurrentPosition(int position)
+void StepperUart::setCurrentPosition(int32_t position)
 {
     _stepper->setCurrentPosition(position);
     lastUpdate = position;

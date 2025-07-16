@@ -19,21 +19,21 @@ public:
     {
         return driver.SGTHRS();
     }
-    void moveTo(int position);
-    int getTargetPosition()
+    void moveTo(int32_t position);
+    int32_t getTargetPosition()
     {
         return targetPosition;
     }
     void stop();
-    int getCurrentPosition();
-    void setCurrentPosition(int position);
-    void setPositionUpdateCallback(void (*callback)(int))
+    int32_t getCurrentPosition();
+    void setCurrentPosition(int32_t position);
+    void setPositionUpdateCallback(void (*callback)(int32_t))
     {
         positionUpdateCallback = callback;
     }
     bool isRunning();
 
-    void (*positionUpdateCallback)(int) = nullptr;
+    void (*positionUpdateCallback)(int32_t) = nullptr;
 
     void enableMotor()
     {
@@ -58,7 +58,7 @@ private:
     HardwareSerial HWSerial = HardwareSerial(0);
     TMC2209Stepper driver = TMC2209Stepper(&HWSerial, R_SENSE, DRIVER_ADDRESS);
 
-    int targetPosition;
+    int32_t targetPosition;
     float speed;
     int enablePin;
     int dirPin;

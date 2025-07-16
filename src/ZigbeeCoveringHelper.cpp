@@ -16,46 +16,39 @@ static Preferences prefs;
 static uint16_t BOTTOM_LIMIT = -1; // Bottom limit in cm
 static uint16_t TOP_LIMIT = -1;    // Top limit in cm
 
-// 2.0cm diameter spool, 200 steps per round x 8 microsteps x 4.666666666666:1 gear ratio
-static uint16_t STEPS_PER_CM = (200 * 8 * 4.667) / (2.0 * PI);
+// 2.0cm diameter spool, 200 steps per round x 8 microsteps x 4.666666666666:1 gear ratio (~ 1188)
+const uint32_t STEPS_PER_CM = (200 * 8 * 4.667) / (2.0 * PI);
 
 // Because the tension in the string is high when lifting the cover, we overshoot the target a bit
 // and then move back down to the target position.
-const uint16_t liftBackOff = 0.3 * STEPS_PER_CM; // how much we initially overshoot the target when moving up
+const uint32_t liftBackOff = 0.3 * STEPS_PER_CM; // how much we initially overshoot the target when moving up
 
 static boolean flag_init = false;
 
-void updatePosition(int currentPosition)
+void updatePosition(int32_t currentPosition)
 {
-    uint16_t currentLift = currentPosition / STEPS_PER_CM;
-    uint8_t currentLiftPercentage = (currentLift * 100) / (BOTTOM_LIMIT - TOP_LIMIT);
+    float currentLift = 1.0 * currentPosition / STEPS_PER_CM - TOP_LIMIT;
+    float currentLiftPercentage = (currentLift * 100.0) / (1.0 * BOTTOM_LIMIT - TOP_LIMIT);
 
     prefs.begin("ZBCover");
-    {
-        uint16_t savedPosition = prefs.getUInt("currentPosition", 0);
-        if (savedPosition != currentPosition)
-        {
-            prefs.putUInt("currentPosition", currentPosition);
-            Serial.printf("Saved lift position: %d (%d%%).\n", currentPosition, currentLiftPercentage);
-        }
-    }
+    int32_t savedPosition = prefs.getInt("currentPosition", 0);
     prefs.end();
+
+    if (savedPosition == currentPosition)
+        return;
+    
+    prefs.putInt("currentPosition", static_cast<int32_t>(currentPosition));
+    Serial.printf("Saved lift position: %d (%.2f%%).\n", currentPosition, currentLiftPercentage);
 
     if (!Zigbee.started() || zbCovering == nullptr)
         return;
 
     if (currentLiftPercentage > 100)
-    {
         zbCovering->setLiftPercentage(100);
-    }
     else if (currentLiftPercentage < 0)
-    {
         zbCovering->setLiftPercentage(0);
-    }
     else
-    {
         zbCovering->setLiftPercentage(currentLiftPercentage);
-    }
 }
 
 void waitForMotorToStop()
@@ -98,7 +91,7 @@ bool targetReached(int target)
             {
                 return false;
             }
-            vTaskDelay(10);
+            vTaskDelay(50);
         }
     }
     if (stepperMotor->getCurrentPosition() == target)
@@ -122,6 +115,7 @@ void openCover()
                 stepperMotor->moveTo(TOP_LIMIT * STEPS_PER_CM + liftBackOff);
             }
         }
+        updatePosition(stepperMotor->getCurrentPosition());
         vTaskDelete(NULL);
     };
     xTaskCreate(openCoverTask, "OpenCoverTask", 2048, nullptr, 1, nullptr);
@@ -182,31 +176,42 @@ void stopCover()
 
 void goToLiftPercentage(uint8_t liftPercentage)
 {
-    uint16_t newLift = (liftPercentage * (BOTTOM_LIMIT - TOP_LIMIT)) / 100;
-    Serial.printf("New requested lift from Zigbee: %d (%d)\n", newLift, liftPercentage);
+    float newLift = (TOP_LIMIT * 1.0 + (liftPercentage * 1.0 * (BOTTOM_LIMIT - TOP_LIMIT) / 100.0));
+    int32_t newPosition = static_cast<int32_t>(newLift * STEPS_PER_CM);
+    Serial.printf("New requested lift from Zigbee: %.2f cm / %d (%d \%)\n", newLift, newPosition, liftPercentage);
 
     if (&stepperMotor == nullptr)
         return;
 
-    if (newLift * STEPS_PER_CM < stepperMotor->getCurrentPosition())
+    if (newPosition < stepperMotor->getCurrentPosition())
     {
-        // Because we are moving up, create a new task where we move the motor, wait for it to stop and then back off a bit
+        stepperMotor->moveTo(newPosition - liftBackOff); // Move to the target minus the lift back off
+        
+        // Because we are moving up, create a new task where we wait for it to stop and then back off a bit
         // to prevent tension in the string
-        TaskFunction_t openCoverTask = [](void *)
+        TaskFunction_t backOffTask = [](void *pvParameters)
         {
+            int32_t newPosition = stepperMotor->getTargetPosition();
+            Serial.printf("Moving to position: %d\n", newPosition);
             if (stepperMotor != nullptr)
             {
-                stepperMotor->moveTo(TOP_LIMIT * STEPS_PER_CM - liftBackOff); // Move to the top limit minus the lift back off
-                if (targetReached(TOP_LIMIT * STEPS_PER_CM - liftBackOff))
+                if (targetReached(newPosition))
                 {
-                    stepperMotor->moveTo(TOP_LIMIT * STEPS_PER_CM + liftBackOff);
+                    stepperMotor->moveTo(newPosition + liftBackOff);
+                    if (targetReached(newPosition + liftBackOff))
+                    {
+                        updatePosition(stepperMotor->getCurrentPosition());
+                    }
                 }
             }
             vTaskDelete(NULL);
         };
-        xTaskCreate(openCoverTask, "OpenCoverTask", 2048, nullptr, 1, nullptr);
+        xTaskCreate(backOffTask, "backOffTask", 2048, nullptr, 1, nullptr);
     }
-    stepperMotor->moveTo(newLift * STEPS_PER_CM);
+    else {
+        // If we are moving down, we just move to the target position as we are already releasing the tension
+        stepperMotor->moveTo(newPosition);
+    }
 }
 
 void onBottomLimitChange(float analog)
@@ -324,7 +329,7 @@ void createAndSetupZigbeeEndpoints()
 void readAndUpdateZigbeeCoverState(StepperUart &motor)
 {
     prefs.begin("ZBCover");
-    uint16_t savedPosition = prefs.getUInt("currentPosition", 0);
+    int32_t savedPosition = prefs.getInt("currentPosition", 0);
     uint8_t SGTHRS = prefs.getUInt("SGTHRS", 130);    // Default to 130 if not set
     BOTTOM_LIMIT = prefs.getUInt("bottomLimit", 100); // Default to 100cm if not set
     TOP_LIMIT = prefs.getUInt("topLimit", 10);        // Default to 10cm if not set
@@ -338,7 +343,7 @@ void readAndUpdateZigbeeCoverState(StepperUart &motor)
     Serial.printf("top limit: %d cm\n", TOP_LIMIT);
     Serial.printf("speed: %.0f\n", speed);
 
-    uint8_t savedLiftPercentage = savedPosition / STEPS_PER_CM * 100 / TOP_LIMIT;
+    uint8_t savedLiftPercentage = (savedPosition / STEPS_PER_CM - TOP_LIMIT) * 100 / (BOTTOM_LIMIT - TOP_LIMIT);
     Serial.printf("Calculated lift percentage: %d\n", savedLiftPercentage);
     Serial.printf("Calculated lift in cm: %d\n", savedPosition / STEPS_PER_CM);
 
